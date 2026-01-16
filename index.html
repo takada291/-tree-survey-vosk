@@ -2,56 +2,126 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>オフライン立木調査</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>立木調査 v3.0</title>
+    
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    
+    <meta name="theme-color" content="#28a745">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="立木調査v3">
+    
     <script src="https://cdn.jsdelivr.net/npm/vosk-browser@0.0.9/dist/vosk.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>立木調査 (Android対応版)</h1>
-        
-        <div id="status-area">
-            <p id="status-text">辞書データを読み込み中...<br>(初回は時間がかかります)</p>
-        </div>
 
-        <div class="input-group">
-            <label>樹種:</label>
-            <input type="text" id="tree-type" placeholder="例: スギ">
+<div class="card">
+    <h2 id="formTitle">立木調査 v3.0 (オフラインAI版)</h2>
+    
+    <div id="status-area">
+        <span id="voiceStatus">準備中... (辞書をロードしています)</span>
+    </div>
+    
+    <input type="hidden" id="editId" value="">
+    
+    <div class="input-row">
+        <div class="label-group">
+            <label>プロット番号</label>
+            <span class="guide">※手入力</span>
         </div>
-        <div class="input-group">
-            <label>胸高直径 (cm):</label>
-            <input type="number" id="tree-diameter" placeholder="例: 24">
-        </div>
-        <div class="input-group">
-            <label>樹高 (m):</label>
-            <input type="number" id="tree-height" placeholder="例: 15">
-        </div>
-
-        <div class="control-area">
-            <button id="mic-btn" disabled>音声入力開始</button>
-            <button id="save-btn">保存</button>
-        </div>
-
-        <div id="result-display">
-            <p>認識中の言葉: <span id="recognized-text">---</span></p>
-        </div>
-
-        <div id="history">
-            <h3>保存データ一覧</h3>
-            <ul id="data-list"></ul>
-        </div>
+        <input type="number" id="plotNo" inputmode="numeric">
     </div>
 
-    <script src="app.js"></script>
-    <script>
-        // オフラインで動くように設定を読み込む
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then(reg => console.log('SW registered!', reg))
-                .catch(err => console.log('SW registration failed', err));
-        }
-    </script>
+    <div class="input-row">
+        <div class="label-group">
+            <label>立木番号</label>
+            <span class="guide">※手入力（自動連番）</span>
+        </div>
+        <input type="number" id="treeNo" inputmode="numeric">
+    </div>
+
+    <div class="input-row">
+        <div class="label-group">
+            <label>樹種</label>
+            <span class="guide">※例「すぎ」「ひのき」</span>
+        </div>
+        <select id="treeType">
+            <option value="スギ">スギ</option>
+            <option value="ヒノキ">ヒノキ</option>
+            <option value="他針">他針</option>
+            <option value="他広">他広</option>
+        </select>
+    </div>
+
+    <div class="input-row">
+        <div class="label-group">
+            <label>胸高直径 (cm)</label>
+            <span class="guide">※例「24」</span>
+        </div>
+        <input type="number" step="0.1" id="dbh" inputmode="decimal">
+    </div>
+
+    <div class="input-row">
+        <div class="label-group">
+            <label>樹高 (m)</label>
+            <span class="guide">※例「15」</span>
+        </div>
+        <input type="number" step="0.1" id="height" inputmode="decimal">
+    </div>
+
+    <div class="input-row">
+        <div class="label-group">
+            <label>材質</label>
+            <span class="guide">※例「ざいしつ びー」</span>
+        </div>
+        <select id="quality">
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+        </select>
+    </div>
+
+    <div class="input-row">
+        <div class="label-group">
+            <label>備考</label>
+            <span class="guide">※例「めも まがり」</span>
+        </div>
+        <input type="text" id="memo">
+    </div>
+    
+    <div class="btn-group">
+        <button id="voiceBtn" class="voice-btn" disabled>準備中...</button>
+        <button id="saveBtn" class="save-btn">保存</button>
+        <button id="cancelBtn" class="cancel-btn">取消</button>
+        <button id="exportBtn" class="export-btn">CSV出力</button>
+    </div>
+    <div class="voice-guide-footer">※認識結果を確認して「ほぞん」と言ってください。</div>
+</div>
+
+<div class="card">
+    <h2>登録済みデータ</h2>
+    <button class="clear-btn" id="clearBtn">全データ消去</button>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr><th>P番</th><th>No</th><th>樹種</th><th>直径</th><th>樹高</th><th>材質</th><th>備考</th><th>操作</th></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="app.js"></script>
+
+<script>
+    // Service Workerの登録
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(() => console.log('SW Registered'))
+            .catch(err => console.log('SW Register Error:', err));
+    }
+</script>
 </body>
 </html>
