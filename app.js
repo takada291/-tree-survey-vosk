@@ -21,9 +21,14 @@ window.onload = async function() {
     
     try {
         voiceStatus.innerText = "辞書データをロード中(40MB)...";
-        // GitHubのリポジトリ構造に合わせて model/model.tar.gz を指定
+        
+        // 【修正点】現在のURLを元に、モデルの「完全な住所(URL)」を作成する
+        // これで「見つからない」という迷子を防ぎます
+        const modelUrl = new URL('model/model.tar.gz', window.location.href).href;
+        console.log("モデル読み込み先:", modelUrl);
+
         const channel = new MessageChannel();
-        model = await Vosk.createModel('model/model.tar.gz');
+        model = await Vosk.createModel(modelUrl);
         model.registerPort(channel.port1);
 
         voiceStatus.innerText = "音声入力：準備完了";
@@ -32,9 +37,11 @@ window.onload = async function() {
         voiceBtn.classList.add('active');
         voiceBtn.innerText = "音声入力開始";
     } catch (e) {
-        voiceStatus.innerText = "エラー: 辞書が見つかりません";
+        // エラー内容を画面に詳しく出す
+        voiceStatus.innerText = "エラー: " + e;
+        voiceStatus.style.background = "#dc3545"; // 赤色にする
         console.error(e);
-        alert("辞書ファイル(model.tar.gz)の読み込みに失敗しました。\nmodelフォルダに正しく配置されているか確認してください。");
+        alert("辞書データの読み込みに失敗しました。\n\n詳細エラー: " + e + "\n\nモデルURL: " + new URL('model/model.tar.gz', window.location.href).href);
     }
 };
 
@@ -57,24 +64,21 @@ async function startRecognition() {
 
         recognizer = new model.KaldiRecognizer(16000);
         
-        // 認識結果イベント
         recognizer.on("result", (message) => {
             const text = message.result.text;
             if (text) {
                 console.log("確定:", text);
                 voiceStatus.innerText = "認識: " + text;
-                processVoiceCommand(text); // 振り分け処理へ
+                processVoiceCommand(text); 
             }
         });
 
-        // 途中経過イベント
         recognizer.on("partialresult", (message) => {
             if (message.result.partial) {
                 voiceStatus.innerText = "聞き取り中: " + message.result.partial;
             }
         });
 
-        // マイク接続
         const source = audioContext.createMediaStreamSource(mediaStream);
         processor = audioContext.createScriptProcessor(4096, 1, 1);
         processor.onaudioprocess = (event) => {
@@ -107,52 +111,42 @@ function stopRecognition() {
 
 // --- 3. 音声コマンドの振り分けロジック ---
 function processVoiceCommand(text) {
-    // 空白で分割して単語リストにする
     const words = text.split(/\s+/);
     
     words.forEach(word => {
-        // --- コマンド判定 ---
         if (word.match(/保存|ほぞん/)) {
             handleSave();
             return;
         }
 
-        // --- 樹種判定 ---
         if (word.match(/スギ|すぎ/)) document.getElementById('treeType').value = "スギ";
         else if (word.match(/ヒノキ|ひのき/)) document.getElementById('treeType').value = "ヒノキ";
         else if (word.match(/他針|たしん/)) document.getElementById('treeType').value = "他針";
         else if (word.match(/他広|たこう/)) document.getElementById('treeType').value = "他広";
         
-        // --- 材質判定 ---
         else if (word.match(/A|a|エー|えー/)) document.getElementById('quality').value = "A";
         else if (word.match(/B|b|ビー|びー/)) document.getElementById('quality').value = "B";
         else if (word.match(/C|c|シー|しー/)) document.getElementById('quality').value = "C";
 
-        // --- 数字判定 (直径と樹高へ自動振り分け) ---
         else if (!isNaN(parseFloat(word))) {
             const num = parseFloat(word);
             const dbhInput = document.getElementById('dbh');
             const heightInput = document.getElementById('height');
 
-            // 直径が空なら直径へ、埋まってれば樹高へ
             if (dbhInput.value === "") {
                 dbhInput.value = num;
             } else {
                 heightInput.value = num;
             }
         }
-        
-        // --- メモ判定 ---
         else if (word.length > 1) {
-             // 数字でもコマンドでもない長い言葉はメモへ（簡易実装）
-             // "メモ 曲がり" のように "メモ" という言葉を除去する処理を入れても良い
              const currentMemo = document.getElementById('memo').value;
              document.getElementById('memo').value = currentMemo + " " + word;
         }
     });
 }
 
-// --- 4. データ保存・管理ロジック (HTML v2.2のロジックを移植) ---
+// --- 4. データ保存・管理ロジック ---
 saveBtn.addEventListener('click', handleSave);
 cancelBtn.addEventListener('click', resetForm);
 exportBtn.addEventListener('click', handleExport);
@@ -192,11 +186,9 @@ function handleSave() {
     resetForm();
     renderTable();
     
-    // 次の入力のために番号を進める
     document.getElementById('plotNo').value = p; 
     document.getElementById('treeNo').value = parseInt(t) + 1;
     
-    // 音声ステータス更新
     voiceStatus.innerText = "保存しました";
     setTimeout(() => voiceStatus.innerText = "待機中", 2000);
 }
@@ -223,7 +215,6 @@ function renderTable() {
     });
 }
 
-// HTML内のonclickから呼ぶためにwindowオブジェクトに紐付け
 window.startEdit = function(id) {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     const target = list.find(item => String(item.id) === String(id));
