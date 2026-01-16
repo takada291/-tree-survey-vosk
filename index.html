@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オフライン立木調査</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/vosk-browser@0.0.9/dist/vosk.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>立木調査 (Android対応版)</h1>
+        
+        <div id="status-area">
+            <p id="status-text">辞書データを読み込み中...<br>(初回は時間がかかります)</p>
+        </div>
+
+        <div class="input-group">
+            <label>樹種:</label>
+            <input type="text" id="tree-type" placeholder="例: スギ">
+        </div>
+        <div class="input-group">
+            <label>胸高直径 (cm):</label>
+            <input type="number" id="tree-diameter" placeholder="例: 24">
+        </div>
+        <div class="input-group">
+            <label>樹高 (m):</label>
+            <input type="number" id="tree-height" placeholder="例: 15">
+        </div>
+
+        <div class="control-area">
+            <button id="mic-btn" disabled>音声入力開始</button>
+            <button id="save-btn">保存</button>
+        </div>
+
+        <div id="result-display">
+            <p>認識中の言葉: <span id="recognized-text">---</span></p>
+        </div>
+
+        <div id="history">
+            <h3>保存データ一覧</h3>
+            <ul id="data-list"></ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // オフラインで動くように設定を読み込む
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('SW registered!', reg))
+                .catch(err => console.log('SW registration failed', err));
+        }
+    </script>
+</body>
+</html>
