@@ -1,19 +1,22 @@
-const CACHE_NAME = 'tree-survey-v3.0.0-fix'; // バージョン名を変えてキャッシュを強制更新
+// キャッシュ名を変更して、強制的に更新させます
+const CACHE_NAME = 'tree-survey-v3.1-local'; 
+
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './manifest.json',
-  'https://cdn.jsdelivr.net/npm/vosk-browser@0.0.9/dist/vosk.js',
-  './model/model.tar.gz' 
+  './vosk.js',    // ← これを追加
+  './vosk.wasm',  // ← これも追加
+  './model/model.tar.gz'
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // すぐに新しい設定を適用
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Opened cache');
+      console.log('すべてのファイルをキャッシュ中...');
       return cache.addAll(urlsToCache);
     })
   );
