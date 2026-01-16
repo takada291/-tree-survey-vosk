@@ -1,37 +1,43 @@
-body {
-    font-family: sans-serif;
-    background-color: #f4f4f4;
-    padding: 20px;
-    margin: 0;
-}
-.container {
-    max-width: 600px;
-    margin: 0 auto;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-h1 { text-align: center; color: #2c3e50; font-size: 1.5rem; }
-.input-group { margin-bottom: 15px; }
-label { display: block; font-weight: bold; margin-bottom: 5px; }
-input {
-    width: 100%; padding: 12px; font-size: 16px;
-    border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
-}
-.control-area { display: flex; gap: 10px; margin-top: 20px; }
-button {
-    flex: 1; padding: 15px; font-size: 16px; border: none;
-    border-radius: 4px; cursor: pointer; color: white; font-weight: bold;
-}
-#mic-btn { background-color: #aaa; pointer-events: none; } /* 初期状態はグレー */
-#mic-btn.ready { background-color: #4CAF50; pointer-events: auto; } /* 準備完了で緑 */
-#mic-btn.recording { background-color: #F44336; animation: blink 1s infinite; } /* 録音中は赤 */
-#save-btn { background-color: #2196f3; }
+body { font-family: -apple-system, sans-serif; padding: 15px; background: #f0f2f5; color: #333; margin: 0; }
+.card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; }
+h2 { margin-top: 0; font-size: 1.1em; color: #2c3e50; border-bottom: 2px solid #28a745; padding-bottom: 5px; margin-bottom: 10px; }
 
-#status-area {
-    text-align: center; background: #e3f2fd; padding: 10px;
-    border-radius: 4px; margin-bottom: 20px; color: #0d47a1; font-weight: bold;
+/* ステータス表示のスタイル調整 */
+#status-area { margin-bottom: 15px; text-align: center; }
+#voiceStatus { font-size: 0.85em; color: #fff; background: #555; padding: 6px 15px; border-radius: 20px; display: inline-block; }
+#voiceStatus.listening { background: #dc3545; animation: pulse 1.5s infinite; }
+#voiceStatus.ready { background: #28a745; }
+
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+.input-row { display: flex; flex-direction: column; margin-bottom: 12px; }
+.label-group { display: flex; align-items: baseline; margin-bottom: 4px; }
+.label-group label { width: 110px; font-size: 0.9em; font-weight: bold; }
+.label-group .guide { font-size: 0.75em; color: #666; font-weight: normal; }
+
+.input-row input, .input-row select {
+    width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 16px; box-sizing: border-box; background-color: white; height: 44px;
 }
-#result-display { margin-top: 15px; font-size: 0.9rem; color: #666; }
-@keyframes blink { 50% { opacity: 0.6; } }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; }
+button { flex: 1; min-width: 80px; padding: 14px; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; }
+
+/* ボタンの色 */
+.save-btn { background: #007bff; }
+.voice-btn { background: #6f42c1; opacity: 0.6; } /* 初期状態は薄く */
+.voice-btn:disabled { cursor: not-allowed; }
+.voice-btn.active { opacity: 1; }
+
+.export-btn { background: #28a745; }
+.cancel-btn { background: #6c757d; display: none; }
+.clear-btn { position: absolute; top: 18px; right: 20px; background: #fff; color: #dc3545; border: 1px solid #dc3545; padding: 4px 8px; font-size: 11px; width: auto; min-width: auto; }
+
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; min-width: 600px; }
+th, td { border: 1px solid #ddd; padding: 8px 4px; text-align: center; }
+th { background: #e9ecef; }
+.action-btns { display: flex; gap: 4px; justify-content: center; }
+.edit-btn { background: #ffc107; color: #212529; padding: 6px; width: 45px; border-radius: 4px; font-size: 11px; }
+.del-btn { background: #dc3545; color: white; padding: 6px; width: 45px; border-radius: 4px; font-size: 11px; }
+.voice-guide-footer { font-size: 0.82em; color: #dc3545; margin-top: 12px; font-weight: bold; text-align: center; background: #fff5f5; padding: 8px; border-radius: 8px; border: 1px dashed #dc3545; }
