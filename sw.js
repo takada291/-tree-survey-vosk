@@ -1,29 +1,27 @@
-const CACHE_NAME = 'offline-survey-v2';
-const ASSETS_TO_CACHE = [
-    './',
-    './index.html',
-    './style.css',
-    './app.js',
-    './manifest.json',
-    'https://cdn.jsdelivr.net/npm/vosk-browser@0.0.9/dist/vosk.js',
-    './model/model.tar.gz'  // これが超重要です！
+const CACHE_NAME = 'tree-survey-v3.0.0';
+const urlsToCache = [
+  './',
+  'index.html',
+  'style.css',
+  'app.js',
+  'manifest.json',
+  'https://cdn.jsdelivr.net/npm/vosk-browser@0.0.9/dist/vosk.js',
+  'model/model.tar.gz' // ← これが最も重要
 ];
 
-// インストール時にファイルを保存
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            console.log('ファイルをキャッシュしています...');
-            return cache.addAll(ASSETS_TO_CACHE);
-        })
-    );
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('Opened cache');
+      return cache.addAll(urlsToCache);
+    })
+  );
 });
 
-// リクエストがあったら保存したファイルを返す
 self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        caches.match(event.request).then((response) => {
-            return response || fetch(event.request);
-        })
-    );
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
 });
