@@ -1,37 +1,47 @@
+// --- グローバル変数 ---
 let model = null;
 let recognizer = null;
 let audioContext = null;
 let mediaStream = null;
 let processor = null;
 let isRecording = false;
+const STORAGE_KEY = 'forest_survey_v3_data';
 
-const statusText = document.getElementById('status-text');
-const micBtn = document.getElementById('mic-btn');
-const recognizedText = document.getElementById('recognized-text');
+// --- UI要素の取得 ---
+const voiceStatus = document.getElementById('voiceStatus');
+const voiceBtn = document.getElementById('voiceBtn');
+const saveBtn = document.getElementById('saveBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const exportBtn = document.getElementById('exportBtn');
+const clearBtn = document.getElementById('clearBtn');
 
-// アプリを開いた瞬間に辞書（モデル）の読み込みを開始
-async function loadModel() {
+// --- 1. Voskモデルの読み込み (起動時に実行) ---
+window.onload = async function() {
+    renderTable(); // 保存データを表示
+    
     try {
-        statusText.textContent = "辞書データをダウンロード中...(40MB)";
-        // GitHubのmodelフォルダ内のファイルを読み込みます
+        voiceStatus.innerText = "辞書データをロード中(40MB)...";
+        // GitHubのリポジトリ構造に合わせて model/model.tar.gz を指定
         const channel = new MessageChannel();
         model = await Vosk.createModel('model/model.tar.gz');
         model.registerPort(channel.port1);
-        
-        statusText.textContent = "準備完了！ボタンを押して話してください。";
-        micBtn.classList.add('ready');
-        micBtn.disabled = false;
-        micBtn.textContent = "音声入力開始";
-    } catch (e) {
-        statusText.textContent = "エラー: 辞書データが見つかりません。" + e;
-        console.error(e);
-    }
-}
 
-// マイクボタンが押されたときの処理
-micBtn.addEventListener('click', async () => {
+        voiceStatus.innerText = "音声入力：準備完了";
+        voiceStatus.classList.add('ready');
+        voiceBtn.disabled = false;
+        voiceBtn.classList.add('active');
+        voiceBtn.innerText = "音声入力開始";
+    } catch (e) {
+        voiceStatus.innerText = "エラー: 辞書が見つかりません";
+        console.error(e);
+        alert("辞書ファイル(model.tar.gz)の読み込みに失敗しました。\nmodelフォルダに正しく配置されているか確認してください。");
+    }
+};
+
+// --- 2. 音声認識の開始・停止 ---
+voiceBtn.addEventListener('click', async () => {
     if (!isRecording) {
-        startRecognition();
+        await startRecognition();
     } else {
         stopRecognition();
     }
@@ -39,105 +49,239 @@ micBtn.addEventListener('click', async () => {
 
 async function startRecognition() {
     if (!model) return;
-
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                sampleRate: 16000
-            }
+            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
         });
 
         recognizer = new model.KaldiRecognizer(16000);
         
-        // 認識結果が出たときの処理
+        // 認識結果イベント
         recognizer.on("result", (message) => {
             const text = message.result.text;
             if (text) {
-                console.log("確定結果:", text);
-                processVoiceInput(text); // 入力欄に振り分ける関数へ
+                console.log("確定:", text);
+                voiceStatus.innerText = "認識: " + text;
+                processVoiceCommand(text); // 振り分け処理へ
             }
         });
 
-        // 途中経過の表示
+        // 途中経過イベント
         recognizer.on("partialresult", (message) => {
             if (message.result.partial) {
-                recognizedText.textContent = message.result.partial;
+                voiceStatus.innerText = "聞き取り中: " + message.result.partial;
             }
         });
 
-        // マイク音声をVoskへ送る処理
+        // マイク接続
         const source = audioContext.createMediaStreamSource(mediaStream);
         processor = audioContext.createScriptProcessor(4096, 1, 1);
-        
         processor.onaudioprocess = (event) => {
-            if (recognizer) {
-                recognizer.acceptWaveform(event.inputBuffer);
-            }
+            if (recognizer) recognizer.acceptWaveform(event.inputBuffer);
         };
 
         source.connect(processor);
         processor.connect(audioContext.destination);
 
         isRecording = true;
-        micBtn.textContent = "停止";
-        micBtn.classList.add('recording');
-        statusText.textContent = "聞いています...";
-
+        voiceBtn.innerText = "停止";
+        voiceStatus.classList.add('listening');
+        voiceStatus.innerText = "聞いています...";
     } catch (err) {
         console.error(err);
-        statusText.textContent = "マイクのエラーです: " + err;
+        alert("マイクの起動に失敗しました: " + err);
     }
 }
 
 function stopRecognition() {
-    if (processor) {
-        processor.disconnect();
-        processor = null;
-    }
-    if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-    }
-    if (audioContext) {
-        audioContext.close();
-    }
+    if (processor) { processor.disconnect(); processor = null; }
+    if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); }
+    if (audioContext) { audioContext.close(); }
     
     isRecording = false;
-    micBtn.textContent = "音声入力開始";
-    micBtn.classList.remove('recording');
-    statusText.textContent = "準備完了";
+    voiceBtn.innerText = "音声入力開始";
+    voiceStatus.classList.remove('listening');
+    voiceStatus.innerText = "音声入力：待機中";
 }
 
-// 音声データを項目に振り分けるロジック
-function processVoiceInput(text) {
-    // 空白で区切られた単語リストにする（例: "スギ 24" -> ["スギ", "24"]）
+// --- 3. 音声コマンドの振り分けロジック ---
+function processVoiceCommand(text) {
+    // 空白で分割して単語リストにする
     const words = text.split(/\s+/);
-
+    
     words.forEach(word => {
-        // 数字かどうか判定
-        const num = parseFloat(word);
-        
-        if (isNaN(num)) {
-            // 数字じゃない場合 -> 「樹種」とみなす
-            // （誤認識を防ぐため、スギ・ヒノキなど特定の言葉だけ拾う条件を入れてもOK）
-            if(word.length > 0) {
-                document.getElementById('tree-type').value = word;
-            }
-        } else {
-            // 数字の場合 -> 空いている順番に入れる
-            const dia = document.getElementById('tree-diameter');
-            const hei = document.getElementById('tree-height');
+        // --- コマンド判定 ---
+        if (word.match(/保存|ほぞん/)) {
+            handleSave();
+            return;
+        }
 
-            if (dia.value === "") {
-                dia.value = num;
-            } else if (hei.value === "") {
-                hei.value = num;
+        // --- 樹種判定 ---
+        if (word.match(/スギ|すぎ/)) document.getElementById('treeType').value = "スギ";
+        else if (word.match(/ヒノキ|ひのき/)) document.getElementById('treeType').value = "ヒノキ";
+        else if (word.match(/他針|たしん/)) document.getElementById('treeType').value = "他針";
+        else if (word.match(/他広|たこう/)) document.getElementById('treeType').value = "他広";
+        
+        // --- 材質判定 ---
+        else if (word.match(/A|a|エー|えー/)) document.getElementById('quality').value = "A";
+        else if (word.match(/B|b|ビー|びー/)) document.getElementById('quality').value = "B";
+        else if (word.match(/C|c|シー|しー/)) document.getElementById('quality').value = "C";
+
+        // --- 数字判定 (直径と樹高へ自動振り分け) ---
+        else if (!isNaN(parseFloat(word))) {
+            const num = parseFloat(word);
+            const dbhInput = document.getElementById('dbh');
+            const heightInput = document.getElementById('height');
+
+            // 直径が空なら直径へ、埋まってれば樹高へ
+            if (dbhInput.value === "") {
+                dbhInput.value = num;
+            } else {
+                heightInput.value = num;
             }
+        }
+        
+        // --- メモ判定 ---
+        else if (word.length > 1) {
+             // 数字でもコマンドでもない長い言葉はメモへ（簡易実装）
+             // "メモ 曲がり" のように "メモ" という言葉を除去する処理を入れても良い
+             const currentMemo = document.getElementById('memo').value;
+             document.getElementById('memo').value = currentMemo + " " + word;
         }
     });
 }
 
-// 起動時にロード開始
-window.onload = loadModel;
+// --- 4. データ保存・管理ロジック (HTML v2.2のロジックを移植) ---
+saveBtn.addEventListener('click', handleSave);
+cancelBtn.addEventListener('click', resetForm);
+exportBtn.addEventListener('click', handleExport);
+clearBtn.addEventListener('click', handleAllClear);
+
+function handleSave() {
+    const p = document.getElementById('plotNo').value;
+    const t = document.getElementById('treeNo').value;
+    const d = document.getElementById('dbh').value;
+    const editId = document.getElementById('editId').value;
+
+    if(!p || !t || !d) {
+        alert("入力不足です（プロット・立木番号・直径は必須）");
+        return;
+    }
+
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const record = {
+        plotNo: p,
+        treeNo: t, 
+        treeType: document.getElementById('treeType').value,
+        dbh: d,
+        height: document.getElementById('height').value,
+        quality: document.getElementById('quality').value,
+        memo: document.getElementById('memo').value,
+        id: editId ? editId : String(Date.now())
+    };
+
+    if (editId) {
+        const index = list.findIndex(item => String(item.id) === String(editId));
+        if (index !== -1) list[index] = record;
+    } else {
+        list.unshift(record);
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    resetForm();
+    renderTable();
+    
+    // 次の入力のために番号を進める
+    document.getElementById('plotNo').value = p; 
+    document.getElementById('treeNo').value = parseInt(t) + 1;
+    
+    // 音声ステータス更新
+    voiceStatus.innerText = "保存しました";
+    setTimeout(() => voiceStatus.innerText = "待機中", 2000);
+}
+
+function renderTable() {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    list.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.plotNo}</td>
+            <td>${item.treeNo}</td>
+            <td>${item.treeType}</td>
+            <td>${item.dbh}</td>
+            <td>${item.height}</td>
+            <td>${item.quality || 'A'}</td>
+            <td>${item.memo || ''}</td>
+            <td class="action-btns">
+                <button class="edit-btn" onclick="startEdit('${item.id}')">修正</button>
+                <button class="del-btn" onclick="handleDelete('${item.id}')">削除</button>
+            </td>`;
+        tbody.appendChild(row);
+    });
+}
+
+// HTML内のonclickから呼ぶためにwindowオブジェクトに紐付け
+window.startEdit = function(id) {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const target = list.find(item => String(item.id) === String(id));
+    if(target) {
+        document.getElementById('editId').value = target.id;
+        document.getElementById('plotNo').value = target.plotNo;
+        document.getElementById('treeNo').value = target.treeNo;
+        document.getElementById('treeType').value = target.treeType;
+        document.getElementById('dbh').value = target.dbh;
+        document.getElementById('height').value = target.height;
+        document.getElementById('quality').value = target.quality || 'A';
+        document.getElementById('memo').value = target.memo || '';
+        
+        document.getElementById('formTitle').innerText = "【修正中】";
+        document.getElementById('saveBtn').innerText = "更新";
+        document.getElementById('cancelBtn').style.display = "inline-block";
+        window.scrollTo(0,0);
+    }
+};
+
+window.handleDelete = function(id) {
+    if(!confirm("削除しますか？")) return;
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const newList = list.filter(item => String(item.id) !== String(id));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+    renderTable();
+};
+
+function handleAllClear() {
+    if(!confirm("全データを消去しますか？")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    renderTable();
+}
+
+function resetForm() {
+    document.getElementById('editId').value = "";
+    document.getElementById('dbh').value = "";
+    document.getElementById('height').value = "";
+    document.getElementById('memo').value = "";
+    document.getElementById('formTitle').innerText = "立木調査 v3.0 (オフラインAI版)";
+    document.getElementById('saveBtn').innerText = "保存";
+    document.getElementById('cancelBtn').style.display = "none";
+}
+
+function handleExport() {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    if(list.length === 0) { alert("データがありません"); return; }
+    let csv = "\ufeffプロット番号,立木番号,樹種,胸高直径(cm),樹高(m),材質,備考\n";
+    list.forEach(item => {
+        csv += `${item.plotNo},${item.treeNo},${item.treeType},${item.dbh},${item.height},${item.quality || 'A'},${(item.memo || "").replace(/,/g, " ")}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const now = new Date();
+    const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+    a.href = url;
+    a.download = "立木調査_v3_" + dateStr + ".csv";
+    a.click();
+    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+}
